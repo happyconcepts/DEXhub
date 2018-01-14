@@ -74,6 +74,7 @@ def new_panel(market, column, chart_type, data=None):
 	Panels[id]['next_refresh'] = datetime.datetime.now() + datetime.timedelta(hours=12)
 	document['newpanel_'+column].outerHTML = p1
 	jq("#form" + str(Panel_count)).hide()
+	document['iMarket_' + id].value = market
 	document["bChangeMarket1_" + id].bind("click", click_new_trades)
 	document["bChangeMarket2_" + id].bind("click", click_new_depth)
 	document["bFilter_" + id].bind("click", click_show)
@@ -133,7 +134,7 @@ def init(comm):
 	global Comm, Panels, Panel_count
 	# globals survive between module calls, clean
 	Comm = comm
-	Comm.send({'operation': 'enqueue', 'module': "main", 'what': 'open_positions'})
+	Comm.send({'operation': 'enqueue', 'module': "general", 'what': 'open_positions'})
 	print("init---------")
 	print(Panel_count)
 	if Panel_count == 0:

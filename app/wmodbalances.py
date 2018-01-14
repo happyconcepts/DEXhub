@@ -3,13 +3,18 @@
 #
 #
 #
+# TODO: ld-loading
+# TODO: bind on charts tab for reload echarts
+# TODO: simulate click event on Charts tab for echart draw
 
 from browser import window, document
+import w_mod_graphs
 
 jq = window.jQuery
 
 Module_name = "balances"
 Accounts = []
+Balances = None
 
 Ws_comm = None
 
@@ -19,6 +24,8 @@ def init(comm):
 	#jq('#panel1').toggleClass('ld-loading')
 	Ws_comm.send({'operation': 'enqueue', 'module': Module_name, 'what': 'get_balances'})
 	#document["bRefresh"].bind('click', click_refresh)
+	jq('.nav-tabs a').on('shown.bs.tab', on_tabshown)
+
 
 def click_refresh(ev):
 	Ws_comm.send({'operation': 'enqueue', 'module': Module_name, 'what': 'get_balances'})
@@ -30,13 +37,25 @@ def click_save_cancel(ev):
 def click_asset_detail(ev):
 	print("asset detail not implemented")
 
-def onResize():
-	pass
+
+def on_tabshown(ev):
+	print("ev.target", ev.target.hash)
+	if ev.target.hash == "#tab-charts":
+		jq("#echart1").show()
+		jq("#echart2").show()
+		ograph = window.echarts.init(document.getElementById("echart1"))
+		og = w_mod_graphs.PieChart1(ograph)
+		og.title = " Top 5 assets"
+		bal = []
+		og.load_data(Balances)
+		ograph.resize()
 
 
 
 def incoming_data(data):
+	global Balances
 	if 'balances' in data['data']:
+		Balances = data['data']['balances']
 		total_base = 0
 		# order by value in USD
 		ord = []
@@ -92,7 +111,6 @@ def incoming_data(data):
 		cols = ['Asset', 'Total', 'Available', 'In Open Orders', 'Value in USD', '% of portfolio', 'Var % Over BTS']
 
 		def dt_format(data, type, row, meta):
-			print(data, type, row, meta)
 			tmpl = '{0:,.'+str(precision[row[0]])+'f}'
 			return tmpl.format(data)
 

@@ -3,6 +3,13 @@
 #
 #
 #
+"""
+Features:
+	Dynamic building of vertical tabs
+	Scrolling tabs
+	Dynamic creation of echarts
+	Filtering on jQuery.DataTables
+"""
 
 from browser import window, document
 import w_mod_graphs
@@ -23,17 +30,17 @@ def init(comm):
 	global Ws_comm
 	Ws_comm = comm
 	#jq('#panel1').toggleClass('ld-loading')
-	Ws_comm.send({'operation': 'enqueue', 'module': "main", 'what': 'open_positions'})
+	Ws_comm.send({'operation': 'enqueue', 'module': "general", 'what': 'open_positions'})
 	document["bReloadOrders"].bind('click', click_reload_orders)
 	document["bBalances"].bind('click', click_balances)
 	jq("#echartx").hide()
 	jq("#echarty").hide()
 
 def click_reload_orders(ev):
-	Ws_comm.send({'operation': 'enqueue', 'module': "main", 'what': 'open_positions'})
+	Ws_comm.send({'operation': 'enqueue', 'module': "general", 'what': 'open_positions'})
 
 def click_balances(ev):
-	Ws_comm.send({'operation': 'enqueue', 'module': "main", 'what': 'get_balances'})
+	Ws_comm.send({'operation': 'enqueue', 'module': "general", 'what': 'get_balances'})
 
 def on_tabshown(ev):
 	id = int(ev.target.hash.split("-")[1])
@@ -75,6 +82,8 @@ def incoming_data(data):
 	global Order_pos
 	# [market, 'sell', "{0:,.5f}".format(q1), "{0:,.8f}".format(q2 / q1), "{0:,.5f}".format(q2), t[1]]
 	print('module', Module_name, "incoming_data")
+	if data['data']['module'] != Module_name and data['data']['module'] != 'general':  # ignore if nothing to do here
+		return
 	if 'open_positions' in data['data']:
 
 		if data['data']['open_positions'] is None:

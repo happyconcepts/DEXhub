@@ -210,3 +210,29 @@ class MarketTrades1(graph_orderbook):
 		self.chart1.setOption(gdata)
 
 
+
+class PieChart1(graph_orderbook):
+	def __init__(self, objchart):
+		super().__init__(objchart)
+
+	def load_data(self, dat):
+		data = [{"name": d, "value": (dat[d][0] + dat[d][1]) * dat[d][2][0]} for d in dat]
+
+		gdata = {"tooltip": {"trigger": 'item', "formatter": "{a} <br/>{b}: {c} ({d}%)"},
+				"series": [{"name": 'Balances', "type":'pie', "radius": ['40%', '55%'],
+								"center": ['50%', '50%'],
+								"label": {"normal": {"formatter": '{b|{b}}{abg|}\n{hr|}\n {c}  {per|{d}%}  ',
+													"backgroundColor": '#eee', "borderColor": '#aaa', "borderWidth": 1,
+													"borderRadius": 4, "padding": [0, 7],
+									"rich": {"a": {"color": '#999', "lineHeight": 22, "align": 'center'},
+										"hr": {"borderColor": '#aaa', "width": '100%', "borderWidth": 0.5, "height": 0},
+										"b": {"fontSize": 16, "lineHeight": 33},
+										"per": {"color": '#eee', "backgroundColor": '#334455', "padding": [2, 4], "borderRadius": 2}}}},
+								"data": data
+							}
+							]
+						}
+
+		self.chart1.setOption(gdata)
+
+

@@ -105,15 +105,20 @@ from config import *
 import asyncio
 import json
 import arrow
-import random
 
 
 def init():
 	"""
-	Initialisation
+	Loads initial data from Bitshares Blockchain
 	*
 	:return:
 	"""
+	# TODO: obtain the last block number
+	# TODO: retrieve account history
+	# TODO: load balances
+	# TODO: load open positions
+
+	from bitshares import account
 
 	async def load_assets():
 		"""
@@ -234,9 +239,6 @@ def blockchain_listener():
 
 async def read_ticker(market):
 	# TODO: make lazy execution
-	rtn = Redisdb.get("ticker_"+market)
-	if rtn is not None:
-		return json.loads(rtn.decode('utf8'))
 	pair = market.split("/")
 	# BTS/USD get ticker of BTS with prices in USD
 	if pair[0] != pair[1]:
@@ -244,9 +246,7 @@ async def read_ticker(market):
 		mid_price = (float(rtn['lowest_ask']) + float(rtn['highest_bid']))/2
 		chg_24h = float(rtn['percent_change'])
 		volume = float(rtn['base_volume'])
-		rtn = [mid_price, volume, chg_24h]
-		Redisdb.setex("ticker_"+market, random.randint(200, 3000), json.dumps(rtn))
-		return rtn
+		return [mid_price, volume, chg_24h]
 	else:
 		return [1,0,0]
 
@@ -271,11 +271,7 @@ async def read_balances():
 			rtn = []
 			print(err.__repr__())
 		for r in rtn:
-			try:
-				prec = int(Redisdb.hget("asset2:" + r['asset_id'], 'precision'))
-			except:
-				# if there is new assets what to do?
-				print('error')
+			prec = int(Redisdb.hget("asset2:" + r['asset_id'], 'precision'))
 			symbol = Redisdb.hget("asset2:" + r['asset_id'], 'symbol').decode('utf8')
 			amount = round(int(r['amount']) / 10 ** prec, prec)
 			if amount > 0:
@@ -297,26 +293,10 @@ async def read_open_positions():
 			account_data = Bitshares.rpc.get_full_accounts([account[0]], False)[0][1]
 		except:
 			continue
-		# read call orders
-		if Redisdb.get("balances_callorders") is None:
-			call_orders = []
-			for co in account_data['call_orders']:
-				quote = co['call_price']['quote']['asset_id']
-				base = co['call_price']['base']['asset_id']
-				quote_asset = [Redisdb.hget("asset2:"+quote, 'symbol').decode('utf8'), int(Redisdb.hget("asset2:"+quote, 'precision'))]
-				base_asset =  [Redisdb.hget("asset2:"+base, 'symbol').decode('utf8'), int(Redisdb.hget("asset2:"+base, 'precision'))]
-				try:
-					amount_debt = round(int(co['debt']) / 10 ** quote_asset[1], quote_asset[1])
-					amount_collateral = round(int(co['collateral']) / 10 ** base_asset[1], base_asset[1])
-					call_orders.append([quote_asset[0], amount_debt, base_asset[0], amount_collateral])
-				except Exception as err:
-					print(err.__repr__())
-			if len(call_orders) > 0:
-				Redisdb.setex("balances_callorders", 300, json.dumps(call_orders))
-
 		# {'top_n_control_flags': 0, 'statistics': '2.6.203202', 'id': '1.2.203202', 'membership_expiration_date': '1969-12-31T23:59:59', 'lifetime_referrer': '1.2.203202', 'lifetime_referrer_fee_percentage': 8000, 'blacklisting_accounts': [], 'options': {'num_committee': 3, 'extensions': [], 'votes': ['0:91', '0:147', '0:173', '2:194', '2:224', '2:231', '2:233'], 'voting_account': '1.2.266887', 'memo_key': 'BTS8QjksGCVaCKmZyspr7sraF77HDE7RQk44w8FgApcYQKtQUpwwT', 'num_witness': 0}, 'referrer_rewards_percentage': 0, 'name': 'tximiss0', 'active': {'weight_threshold': 1, 'key_auths': [['BTS8QjksGCVaCKmZyspr7sraF77HDE7RQk44w8FgApcYQKtQUpwwT', 1]], 'address_auths': [], 'account_auths': [['1.2.446518', 1]]}, 'referrer': '1.2.203202', 'owner_special_authority': [0, {}], 'whitelisting_accounts': [], 'network_fee_percentage': 2000, 'registrar': '1.2.203202', 'active_special_authority': [0, {}], 'owner': {'weight_threshold': 1, 'key_auths': [['BTS7QyUi34KRVmRR4wqTevosoz4BrKGMfR5HFVSmAW17DfUXkTYEK', 1]], 'address_auths': [], 'account_auths': []}, 'cashback_vb': '1.13.2164', 'blacklisted_accounts': [], 'whitelisted_accounts': []}
+		limit_orders = account_data['limit_orders']
 		base_coins = 'BTS,USD,CNY,RUB,EUR'.split(",")
-		for lo in account_data['limit_orders']:
+		for lo in limit_orders:
 			quote =  lo['sell_price']['quote']['asset_id']
 			base = lo['sell_price']['base']['asset_id']
 			quote_asset = [Redisdb.hget("asset2:"+quote, 'symbol').decode('utf8'), int(Redisdb.hget("asset2:"+quote, 'precision'))]
@@ -331,13 +311,12 @@ async def read_open_positions():
 				price = round(amount_base/amount_quote, base_asset[1])
 				total = round(amount_quote*price, base_asset[1])
 				print("buy", quote_asset[0], amount_quote, base_asset[0], amount_base, price, date)
-				#           0       1               2                   3           4       5       6       7       8               9           10
-				ob.append(["buy", quote_asset[0], amount_quote, base_asset[0], amount_base, price, total, date, quote_asset[1], base_asset[1], lo['id']])
+				ob.append(["buy", quote_asset[0], amount_quote, base_asset[0], amount_base, price, total, date, quote_asset[1], base_asset[1]])
 			else:
 				price = round(amount_quote/amount_base, base_asset[1])
 				total = round(amount_base*price, base_asset[1])
 				print("sell", base_asset[0], amount_base, quote_asset[0], amount_quote, price, date)
-				ob.append(["sell", base_asset[0], amount_base, quote_asset[0], amount_quote, price, total, date, base_asset[1], quote_asset[1], lo['id']])
+				ob.append(["sell", base_asset[0], amount_base, quote_asset[0], amount_quote, price, total, date, base_asset[1], quote_asset[1]])
 
 	# Open positions are part of balance
 	if Redisdb.get("balances_openpos") is None:
@@ -362,30 +341,18 @@ async def read_open_positions():
 	return ob
 
 
-def clear_cache():
-	"""
-	Clear cached data depending on accounts
-	:return:
-	"""
-	Redisdb.delete("balances_openpos")
-	Redisdb.delete("balances_callorders")
-
 
 
 def operations_listener():
 
-	Active_module = None
-
 	async def get_balances():
-		# TODO cache balances data
-		# TODO: defer execution and send in another packet
 		"""
 		Return balance consolidated with "balances_openpos"
 		:return: {'asset': [balance, open orders], ...}
 		"""
 		bal1 = await read_balances()
 		if bal1 is None:
-			Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'message': "No account defined!", 'error': True}))
+			Redisdb.rpush("datafeed", json.dumps({'message': "No account defined!", 'error': True}))
 			return
 		bal2 = Redisdb.get("balances_openpos")
 		if bal2 is None:
@@ -397,28 +364,13 @@ def operations_listener():
 				bal1[b] = [bal1[b][0], bal2[b]]
 			else:
 				bal1[b] = [0, bal2[b]]
+		# TODO: defer execution and send in another packet
 		base = await read_ticker("BTS/USD")
 		#return [mid_price, volume, chg_24h]
 		for b in bal1:
 			tick = await read_ticker(b+"/BTS")
-			for t in enumerate(tick):
-				if t[1] == float('Infinity'):
-					tick[t[0]] = 0
-			bal1[b].append([tick[0]*base[0], tick[1]*base[0], tick[2], int(Redisdb.hget("asset1:" + b, 'precision'))])
-
-		margin_lock = 0
-		bal3 = Redisdb.get("balances_callorders")
-		if bal3 is not None:
-			bal3 = json.loads(bal3.decode('utf8'))
-			for b in bal3:
-				tick = await read_ticker(b[0]+"/BTS")
-				for t in enumerate(tick):
-					if t[1] == float('Infinity'):
-						tick[t[0]] = 0
-				# assume that collateral is always BTS
-				margin_lock += (b[3] * base[0]) -  (b[1] * tick[0] * base[0])
-
-		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'balances': bal1, 'margin_lock': margin_lock}))
+			bal1[b].append([tick[0]*base[0], tick[1]*base[0], tick[2]])
+		Redisdb.rpush("datafeed", json.dumps({'balances': bal1}))
 
 
 	async def get_orderbook(mkt):
@@ -466,12 +418,12 @@ def operations_listener():
 		buys.extend([s for s in sells if s[1] < best_offer * 5])
 		buys.sort(key=lambda x: x[1])
 
-		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'orderbook': {'market': mkt, 'date': arrow.utcnow().isoformat(), 'data': buys}}))
+		Redisdb.rpush("datafeed", json.dumps({'orderbook': {'market': mkt, 'date': arrow.utcnow().isoformat(), 'data': buys}}))
 
 
 	async def get_open_positions():
 		rtn = await read_open_positions()
-		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'open_positions': rtn}))
+		Redisdb.rpush("datafeed", json.dumps({'open_positions': rtn}))
 
 
 	def normalize_isoformat(dat):
@@ -545,7 +497,7 @@ def operations_listener():
 				["2004-04-21", 10311.87, 10317.27, 10200.38, 10398.53, 232630000],
 				["2004-04-22", 10314.99, 10461.2, 10255.88, 10529.12, 265740000]]
 			#movs.sort(key=lambda x: x[0])
-			Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'market_trades': {'market': mkt, 'data': movs}}))
+			Redisdb.rpush("datafeed", json.dumps({'market_trades': {'market': mkt, 'data': movs}}))
 
 	async def get_settings_account_list():
 		rtn = Redisdb.get("settings_accounts")
@@ -553,7 +505,7 @@ def operations_listener():
 			accounts = []
 		else:
 			accounts = json.loads(rtn.decode('utf8'))
-		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'settings_account_list': accounts}))
+		Redisdb.rpush("datafeed", json.dumps({'settings_account_list': accounts}))
 
 	async def settings_account_new(dat):
 		rtn = Redisdb.get("settings_accounts")
@@ -564,10 +516,9 @@ def operations_listener():
 		account_id = Bitshares.rpc.get_account(dat[0])['id']
 		dat.append(account_id)
 		accounts.append(dat)
-		clear_cache()
 		Redisdb.set("settings_accounts", json.dumps(accounts))
-		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'settings_account_list': accounts}))
-		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'message': "Account created<br><strong>"+dat[0]+"</strong>"}))
+		Redisdb.rpush("datafeed", json.dumps({'settings_account_list': accounts}))
+		Redisdb.rpush("datafeed", json.dumps({'message': "Account created<br><strong>"+dat[0]+"</strong>"}))
 
 	async def settings_account_del(id):
 		rtn = Redisdb.get("settings_accounts")
@@ -577,9 +528,8 @@ def operations_listener():
 			accounts = json.loads(rtn.decode('utf8'))
 			accounts.pop(id)
 			Redisdb.set("settings_accounts", json.dumps(accounts))
-		clear_cache()
-		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'settings_account_list': accounts}))
-		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'message': "Account deleted"}))
+		Redisdb.rpush("datafeed", json.dumps({'settings_account_list': accounts}))
+		Redisdb.rpush("datafeed", json.dumps({'message': "Account deleted"}))
 
 	async def settings_misc_save(dat):
 		rtn = Redisdb.get("settings_misc")
@@ -590,8 +540,8 @@ def operations_listener():
 		for k in dat['data']:
 			settings[k] = dat['data'][k]
 		Redisdb.set("settings_misc", json.dumps(settings))
-		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'settings_misc': settings}))
-		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'message': "settings saved"}))
+		Redisdb.rpush("datafeed", json.dumps({'settings_misc': settings}))
+		Redisdb.rpush("datafeed", json.dumps({'message': "settings saved"}))
 
 	async def get_settings_misc():
 		rtn = Redisdb.get("settings_misc")
@@ -599,7 +549,7 @@ def operations_listener():
 			settings = {}
 		else:
 			settings = json.loads(rtn.decode('utf8'))
-		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'settings_misc': settings}))
+		Redisdb.rpush("datafeed", json.dumps({'settings_misc': settings}))
 
 	async def master_unlock(dat):
 		rtn = Redisdb.get("settings_misc")
@@ -607,25 +557,12 @@ def operations_listener():
 			return False
 		settings = json.loads(rtn.decode('utf8'))
 		if dat['data'] == settings['master_password']:
-			Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'master_unlock': {'message': 'unlocked', 'error': False}}))
-			Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'message': "Unlocked", 'error': False}))
+			Redisdb.rpush("datafeed", json.dumps({'master_unlock': {'message': 'unlocked', 'error': False}}))
+			Redisdb.rpush("datafeed", json.dumps({'message': "Unlocked", 'error': False}))
 		else:
-			Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'master_unlock': {'message': "password does not match", 'error': True}}))
-			Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'message': "Password does not match", 'error': True}))
+			Redisdb.rpush("datafeed", json.dumps({'master_unlock': {'message': "password does not match", 'error': True}}))
+			Redisdb.rpush("datafeed", json.dumps({'message': "Password does not match", 'error': True}))
 
-	async def marketpanels_savelayout(dat):
-		Redisdb.set("MarketPanels_layout", dat['data'])
-
-	async def marketpanels_loadlayout(dat):
-		default = [["OPEN.ETH/BTS", 1]]
-		rtn = Redisdb.get("MarketPanels_layout")
-		if rtn is None:
-			layout = default
-		else:
-			layout = json.loads(rtn.decode('utf8'))
-			if len(layout) == 0:
-				layout = default
-		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'marketpanels_layout': layout}))
 
 	async def do_ops(op):
 		"""
@@ -633,16 +570,11 @@ def operations_listener():
 		:param op:
 		:return:
 		"""
-		nonlocal Active_module
 		try:
 			dat = json.loads(op.decode('utf8'))
 		except Exception as err:
 			print(err.__repr__())
 			return
-		if dat['module'] != 'general' and dat['module'] != Redisdb.get('Active_module').decode('utf8'):  # discard
-			print("discard")
-			return
-		Active_module = dat['module']
 		if dat['what'] == 'orderbook':
 			await get_orderbook(dat['market'])
 		elif dat['what'] == 'open_positions':
@@ -663,12 +595,7 @@ def operations_listener():
 			await get_settings_misc()
 		elif dat['what'] == 'master_unlock':
 			await master_unlock(dat)
-		elif dat['what'] == 'marketpanels_savelayout':
-			await marketpanels_savelayout(dat)
-		elif dat['what'] == 'marketpanels_loadlayout':
-			await marketpanels_loadlayout(dat)
-		elif dat['what'] == 'ping':
-			Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'data': 'pong'}))
+
 
 	async def do_operations():
 		while True:
@@ -687,10 +614,6 @@ def operations_listener():
 
 if __name__ == "__main__":
 	import sys
-	# init is necesary the first run for load the assets
-	init()
-	if Redisdb.hget("asset1:BTS", 'symbol') is None:
-		init()
 	if len(sys.argv) > 1:
 		if 'init' in sys.argv[1]:
 			init()
@@ -699,5 +622,8 @@ if __name__ == "__main__":
 		elif 'operations_listener' in sys.argv[1]:
 			operations_listener()
 	else:
+		# init is necesary the first run for load the assets
+		#init()
+
 		# runs in bg, invoked in main
 		operations_listener()

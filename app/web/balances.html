@@ -24,11 +24,17 @@
         <div class="tabs-container">
             <div class="tabs-left">
                 <ul class="nav nav-tabs">
-                    <li class="active"><a data-toggle="tab" href="#tab-1">Table</a></li>
-                    <li class=""><a data-toggle="tab" href="#tab-2">Datatable</a></li>
+                    <li class="active"><a data-toggle="tab" href="#tab-charts">Charts</a></li>
+                    <li class=""><a data-toggle="tab" href="#tab-table">Table</a></li>
+                    <li class=""><a data-toggle="tab" href="#tab-datatable">Datatable</a></li>
                 </ul>
                 <div class="tab-content ">
-                    <div id="tab-1" class="tab-pane active">
+                    <div id="tab-charts" class="tab-pane active">
+                        <div class="panel-body" id="balances_charts" style="width:100%; height:600px;">
+                            <div id="echart1" style="height:400px; display: none;"></div>
+                        </div>
+                    </div>
+                    <div id="tab-table" class="tab-pane">
                         <div class="panel-body">
                             <div class="pre-scrollable" style="max-height:500px;">
                                 <div id="table1" class="table-responsive">
@@ -36,7 +42,7 @@
                             </div>
                         </div>
                     </div>
-                    <div id="tab-2" class="tab-pane">
+                    <div id="tab-datatable" class="tab-pane">
                         <div class="panel-body">
                             <h4>Total <span id="lTotal">$</span></h4>
                             <div class="table-responsive">

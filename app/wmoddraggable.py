@@ -19,7 +19,7 @@ Panel_count = 0
 
 def save_layout():
 	global Panels
-	Ws_comm.send({'operation': 'enqueue', 'module': "main", 'what': 'open_positions'})
+	Ws_comm.send({'operation': 'enqueue', 'module': "general", 'what': 'open_positions'})
 
 
 def drag_receive(ev, ui):

@@ -23,17 +23,17 @@ def init(comm):
 	global Ws_comm
 	Ws_comm = comm
 	#jq('#panel1').toggleClass('ld-loading')
-	Ws_comm.send({'operation': 'enqueue', 'module': "main", 'what': 'open_positions'})
+	Ws_comm.send({'operation': 'enqueue', 'module': "general", 'what': 'open_positions'})
 	document["bReloadOrders"].bind('click', click_reload_orders)
 	document["bBalances"].bind('click', click_balances)
 	jq("#echartx").hide()
 	jq("#echarty").hide()
 
 def click_reload_orders(ev):
-	Ws_comm.send({'operation': 'enqueue', 'module': "main", 'what': 'open_positions'})
+	Ws_comm.send({'operation': 'enqueue', 'module': "general", 'what': 'open_positions'})
 
 def click_balances(ev):
-	Ws_comm.send({'operation': 'enqueue', 'module': "main", 'what': 'get_balances'})
+	Ws_comm.send({'operation': 'enqueue', 'module': "general", 'what': 'get_balances'})
 
 def on_tabshown(ev):
 	id = int(ev.target.hash.split("-")[1])

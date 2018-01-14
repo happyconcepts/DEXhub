@@ -22,10 +22,9 @@ import random
 from render import Render
 
 Client_comm = None
-Active_modname = None
 Procs = []
 Develop = False
-
+Active_module = None
 
 # ----------- CONSTANTS
 from config import *
@@ -67,7 +66,7 @@ async def route1(req, tag):
 
 @app.websocket('/comm')
 async def wscomms(request, ws):
-	global Client_comm, Active_modname
+	global Client_comm, Active_module
 	while True:
 		data = await ws.recv()
 		if data is not None:
@@ -79,8 +78,9 @@ async def wscomms(request, ws):
 					if dat['operation'] == 'module_activation':
 						Redisdb.bgsave()
 						Redisdb.delete('operations')  # cleanup
-						Redisdb.rpush('operations', json.dumps({'what': 'data_store_save'}))
-						Active_modname = dat['module']
+						Redisdb.rpush('operations', json.dumps({'module': 'general', 'what': 'data_store_save'}))
+						Redisdb.set('Active_module', dat['module'])
+						Active_module = dat['module']
 						# initial data?
 						#rtn = getattr(bitshares_data, Active_modname)()
 						#await ws.send(json.dumps({"data": rtn}))
@@ -99,10 +99,9 @@ async def wscomms(request, ws):
 
 
 async def feeder():
-	global Active_modname
 	while True:
 		if Client_comm is not None:
-			if Active_modname == 'dashboard':
+			if Active_module == 'dashboard':
 				await Client_comm.send(json.dumps({'module': 'dashboard', 'data': random.random()}))
 				await sleep(2)
 		while True:
@@ -111,7 +110,9 @@ async def feeder():
 			if rtn is None:
 				break
 			df = json.loads(rtn.decode('utf8'))
-			dat = {'module': Active_modname, 'data': df}
+			if df['module'] != Active_module and df['module'] != 'general':  # discard data from previous modules #38
+				continue
+			dat = {'module': Active_module, 'data': df}
 			try:
 				await Client_comm.send(json.dumps(dat))
 			except Exception as err:
