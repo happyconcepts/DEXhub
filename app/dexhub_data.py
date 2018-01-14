@@ -688,7 +688,6 @@ def operations_listener():
 if __name__ == "__main__":
 	import sys
 	# init is necesary the first run for load the assets
-	init()
 	if Redisdb.hget("asset1:BTS", 'symbol') is None:
 		init()
 	if len(sys.argv) > 1:
