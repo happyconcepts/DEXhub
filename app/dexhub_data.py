@@ -260,6 +260,11 @@ async def account_list():
 
 
 async def read_balances():
+	bal = Redisdb.get('cache_balances')
+	if bal is not None:
+		bal = json.loads(bal.decode('utf8'))
+		return bal
+
 	alist = await account_list()
 	if len(alist) == 0:
 		return None
@@ -283,6 +288,7 @@ async def read_balances():
 					bal[symbol] = [bal[symbol][0] + amount, 0]
 				else:
 					bal[symbol] = [amount, 0]
+	Redisdb.setex("cache_balances", random.randint(200, 3000), json.dumps(bal))
 	return bal
 
 

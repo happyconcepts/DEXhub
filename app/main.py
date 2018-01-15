@@ -132,7 +132,8 @@ if __name__ == '__main__':
 			# cleanup
 			Redisdb.delete('messages')
 			Redisdb.delete('operations')
-			Redisdb.delete("batch_jobs")
+			Redisdb.delete('operations_bg')
+			Redisdb.delete("datafeed")
 			break
 		except:
 			time.sleep(1)

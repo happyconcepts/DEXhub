@@ -4,8 +4,6 @@
 #
 #
 # TODO: ld-loading
-# TODO: bind on charts tab for reload echarts
-# TODO: simulate click event on Charts tab for echart draw
 
 from browser import window, document
 import w_mod_graphs
@@ -37,17 +35,17 @@ def click_save_cancel(ev):
 def click_asset_detail(ev):
 	print("asset detail not implemented")
 
+def init_echart():
+	jq("#echart1").show()
+	ograph = window.echarts.init(document.getElementById("echart1"))
+	og = w_mod_graphs.PieChart1(ograph)
+	og.load_data(Balances)
+
 
 def on_tabshown(ev):
 	print("ev.target", ev.target.hash)
 	if ev.target.hash == "#tab-charts":
-		jq("#echart1").show()
-		jq("#echart2").show()
-		ograph = window.echarts.init(document.getElementById("echart1"))
-		og = w_mod_graphs.PieChart1(ograph)
-		og.title = " Top 5 assets"
-		bal = []
-		og.load_data(Balances)
+		init_echart()
 		ograph.resize()
 
 
@@ -56,6 +54,7 @@ def incoming_data(data):
 	global Balances
 	if 'balances' in data['data']:
 		Balances = data['data']['balances']
+		init_echart()
 		total_base = 0
 		# order by value in USD
 		ord = []

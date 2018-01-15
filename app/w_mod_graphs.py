@@ -216,7 +216,9 @@ class PieChart1(graph_orderbook):
 		super().__init__(objchart)
 
 	def load_data(self, dat):
-		data = [{"name": d, "value": (dat[d][0] + dat[d][1]) * dat[d][2][0]} for d in dat]
+		data = [{"name": d, "value": round((dat[d][0] + dat[d][1]) * dat[d][2][0], 0)} for d in dat]
+		data.sort(key=lambda x: x['value'], reverse=True)
+		data = data[:5]
 
 		gdata = {"tooltip": {"trigger": 'item', "formatter": "{a} <br/>{b}: {c} ({d}%)"},
 				"series": [{"name": 'Balances', "type":'pie', "radius": ['40%', '55%'],

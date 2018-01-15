@@ -54,6 +54,7 @@ ws_comm = wwebsockets.Wscomm("ws://127.0.0.1:8808/comm", ws_received)
 def init_data():
 	if ws_comm.open:
 		#ws_comm.send({'operation': 'enqueue', 'module': "main", 'what': 'open_positions'})
+		ws_comm.send({'operation': 'enqueue_bg', 'module': "general", 'what': 'get_balances'})
 		wglobals.clear_timer(0)
 
 wglobals.set_timer(0, init_data, 0.1)
