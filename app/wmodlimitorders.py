@@ -24,6 +24,8 @@ MarketTab = {}
 MarketTab2 = {}
 ChartData = {}
 Order_pos = {}
+Order_id_list = []  # list of order's ids
+Order_id_deleted = [] # list of deleted order's ids
 Ws_comm = None
 
 def init(comm):
@@ -42,11 +44,22 @@ def click_reload_orders(ev):
 def click_balances(ev):
 	Ws_comm.send({'operation': 'enqueue', 'module': "general", 'what': 'get_balances'})
 
+def click_delete_order(ev):
+	global Order_id_deleted
+	id = ev.target.id.split("_")[1]
+	Order_id_deleted.append(id)
+	Ws_comm.send({'operation': 'enqueue', 'module': Module_name, 'what': 'del_order', 'id': id})
+	jq('#tableExample1').DataTable().rows().invalidate('data')
+	jq('#tableExample1').DataTable().draw(False)
+
+
 def on_tabshown(ev):
 	id = int(ev.target.hash.split("-")[1])
 	if id == 1:
 		jq('#tableExample1').DataTable().search('').draw()
 		jq("#echartx").hide()
+		jq("#echarty").hide()
+		return
 
 	market = MarketTab2[id]
 	Ws_comm.send({'operation': 'enqueue', 'module': Module_name, 'what': 'get_market_trades', 'market': market,
@@ -64,6 +77,7 @@ def on_tabshown(ev):
 	og.orders = Order_pos[market]
 	og.load_data(ChartData[market])
 	jq('#tableExample1').DataTable().search(market).draw()
+	jq("#echarty").show()
 
 
 def create_tab(num, name, market, badge1):
@@ -78,10 +92,19 @@ def create_tab(num, name, market, badge1):
 def onResize():
 	pass
 
+def table_drawn(settings):
+	for order_id in Order_id_list:
+		try:
+			if document["bDelOrder_{0}".format(order_id)].events('click'):
+				document["bDelOrder_{0}".format(order_id)].unbind('click', click_delete_order)
+			document["bDelOrder_{0}".format(order_id)].bind('click', click_delete_order)
+		except:
+			continue
+
+
 def incoming_data(data):
-	global Order_pos
+	global Order_pos, Order_id_list
 	# [market, 'sell', "{0:,.5f}".format(q1), "{0:,.8f}".format(q2 / q1), "{0:,.5f}".format(q2), t[1]]
-	print('module', Module_name, "incoming_data")
 	if data['data']['module'] != Module_name and data['data']['module'] != 'general':  # ignore if nothing to do here
 		return
 	if 'open_positions' in data['data']:
@@ -89,6 +112,8 @@ def incoming_data(data):
 		if data['data']['open_positions'] is None:
 			return
 
+		Order_id_list = []
+		Order_id_deleted = []
 		#jq('#panel1').addClass('ld-loading')
 		cols = "Market,Operation,Quantity,Price,Total,Date"
 		dat1 = data['data']['open_positions']
@@ -102,7 +127,8 @@ def incoming_data(data):
 			tmpl1 = "{:,."+str(d[8])+"f}"
 			tmpl2 = "{:,."+str(d[9])+"f}"
 			market = d[1]+"/"+d[3]
-			dat.append([market, d[0], tmpl1.format(d[2]), tmpl2.format(d[5]), tmpl2.format(d[6]), d[7]])
+			Order_id_list.append(d[10])
+			dat.append([market, d[0], tmpl1.format(d[2]), tmpl2.format(d[5]), tmpl2.format(d[6]), d[7], d[10]])
 			if market in markets:
 				markets[market] += 1
 				Order_pos[market].append([d[0], d[5]])
@@ -120,28 +146,31 @@ def incoming_data(data):
 		for l in lmkts[:]:
 			Ws_comm.send({'operation': 'enqueue_bg', 'module': Module_name, 'what': 'orderbook', 'market': l})
 
-		jq('#tableExample1').DataTable({"data": dat, "columns": [{'title': v} for v in cols.split(",")],
+		def cell_buttons(data, type, row, meta):
+			if data not in Order_id_deleted:
+				return '<a role="button" id="bDelOrder_{0}" class="fa fa-times fa-2x"></a>'.format(data)
+			else:
+				return '<span>deleted</span>'.format(data)
+
+		dt = jq('#tableExample1').DataTable({"data": dat, "columns": [{'title': v} for v in cols.split(",")],
 			"dom": "<'row'<'col-sm-4'l><'col-sm-4 text-center'B><'col-sm-4'f>>tp",
 			"lengthMenu": [[10, 16, 50, -1], [10, 16, 50, "All"]],
+			"columnDefs": [{"targets": 6, "render": cell_buttons}],
+			"drawCallback": table_drawn,
 			"buttons": [{"extend": 'copy', "className": 'btn-sm'},
 						{"extend": 'csv', "title": 'ExampleFile', "className": 'btn-sm'},
 						{"extend": 'pdf', "title": 'ExampleFile', "className": 'btn-sm'},
 						{"extend": 'print', "className": 'btn-sm'}]})
 		#jq('#panel1').removeClass('ld-loading')
 
+
 	elif 'orderbook' in data['data']:
-		print(data['data']['orderbook']['date'], data['data']['orderbook']['market'], data['data']['orderbook']['data'][0])
 		market = data['data']['orderbook']['market']
 		maxv = data['data']['orderbook']['data'][0][3]
 		data['data']['orderbook']['data'].insert(0, ['buy', 0, 0, maxv])
 		ChartData[market] = data['data']['orderbook']['data']
 
 	elif 'market_trades' in data['data']:
-		jq("#echarty").show()
-		print("Market trades received")
-		print(data['data']['market_trades']['market'])
-		print(data['data']['market_trades']['market'], len(data['data']['market_trades']['data']))
-		print(data['data']['market_trades']['data'][0], len(data['data']['market_trades']['data']))
 		market = data['data']['market_trades']['market']
 		ograph = window.echarts.init(document.getElementById("echarty"))
 		og = w_mod_graphs.MarketTrades1(ograph)

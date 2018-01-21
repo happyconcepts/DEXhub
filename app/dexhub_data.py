@@ -108,85 +108,81 @@ import arrow
 import random
 
 
+def load_assets():
+	"""
+	Load all the Bitshares assets.
+	:return:
+	"""
+	print("bitshares_data.init > load_assets")
+
+	def write(batch):
+		"""
+		Writes assets to DB
+		:param batch:
+		:return:
+		"""
+		p = Redisdb.pipeline()
+		for b in batch:
+			for k in b.keys():
+				if k == 'options':
+					p.hset("asset1:" + b['symbol'], k, json.dumps(b[k]))
+					p.hset("asset2:" + b['id'], k, json.dumps(b[k]))
+				else:
+					p.hset("asset1:" + b['symbol'], k, b[k])
+					p.hset("asset2:" + b['id'], k, b[k])
+		p.incr("status:loading_assets", 100)
+		p.execute()
+
+	Redisdb.set("status:loading_assets", 0)
+	cols = "id,issuer,dynamic_asset_data_id,symbol,precision,description_main,description_market,\
+			description_short_name,market_fee_percent,issuer_permissions,flags,max_supply,options".split(",")
+	next_asset = ""
+	while True:
+		dassets = []
+		assets = Bitshares.rpc.list_assets(next_asset, 100)
+		for a in assets:
+			row = {}
+			for col in a.keys():
+				if col in cols:
+					row[col] = a[col]
+			for col in a['options'].keys():
+				if col in cols:
+					row[col] = a['options'][col]
+			row['description_main'] = ''
+			row['description_market'] = ''
+			row['description_short_name'] = ''
+			if a['options']['description'][:1] == "{":
+				desc = json.loads(a['options']['description'])
+				row['description_main'] = desc['main']
+				if 'market' in desc:
+					row['description_market'] = desc['market']
+				if 'short_name' in desc:
+					row['description_short_name'] = desc['short_name']
+			else:
+				row['description_main'] = a['options']['description']
+			dassets.append(row)
+		write(dassets)
+		next_asset = a['symbol'] + " "
+		if len(assets) < 100:
+			break
+	Redisdb.set("status:loading_assets", len(assets))
+	print("bitshares_data.init > load_assets end")
+
+
 def init():
 	"""
 	Initialisation
 	*
 	:return:
 	"""
-
-	async def load_assets():
-		"""
-		Load all the Bitshares assets.
-		:return:
-		"""
-		print("bitshares_data.init > load_assets")
-		def write(batch):
-			"""
-			Writes assets to DB
-			:param batch:
-			:return:
-			"""
-			p = Redisdb.pipeline()
-			for b in batch:
-				for k in b.keys():
-					if k == 'options':
-						p.hset("asset1:" + b['symbol'], k, json.dumps(b[k]))
-						p.hset("asset2:" + b['id'], k, json.dumps(b[k]))
-					else:
-						p.hset("asset1:" + b['symbol'], k, b[k])
-						p.hset("asset2:" + b['id'], k, b[k])
-			p.incr("status:loading_assets", 100)
-			p.execute()
-
-		Redisdb.set("status:loading_assets", 0)
-		cols = "id,issuer,dynamic_asset_data_id,symbol,precision,description_main,description_market,\
-				description_short_name,market_fee_percent,issuer_permissions,flags,max_supply,options".split(",")
-		next_asset = ""
-		while True:
-			dassets = []
-			assets = Bitshares.rpc.list_assets(next_asset, 100)
-			for a in assets:
-				row = {}
-				for col in a.keys():
-					if col in cols:
-						row[col] = a[col]
-				for col in a['options'].keys():
-					if col in cols:
-						row[col] = a['options'][col]
-				row['description_main'] = ''
-				row['description_market'] = ''
-				row['description_short_name'] = ''
-				if a['options']['description'][:1] == "{":
-					desc = json.loads(a['options']['description'])
-					row['description_main'] = desc['main']
-					if 'market' in desc:
-						row['description_market'] = desc['market']
-					if 'short_name' in desc:
-						row['description_short_name'] = desc['short_name']
-				else:
-					row['description_main'] = a['options']['description']
-				dassets.append(row)
-			write(dassets)
-			next_asset = a['symbol'] + " "
-			if len(assets) < 100:
-				break
-		Redisdb.set("status:loading_assets", len(assets))
-		print("bitshares_data.init > load_assets end")
-
-
-	tasks = [asyncio.ensure_future(load_assets())]
-
-	loop = asyncio.get_event_loop()
-	loop.run_until_complete(asyncio.wait(tasks))
-
+	load_assets()
 	Redisdb.bgsave()
 	print("end")
 
 
 
 # TODO: dismissed in favour of limit_orders
-def datatables():
+def datatables_del():
 	"""
 	Return data relevant to datatables module.
 	:return:
@@ -200,7 +196,7 @@ def datatables():
 	return rtn
 
 
-def limitorders():
+def limitorders_del():
 	"""
 	Return data relevant to limitorders module.
 	At starts
@@ -268,26 +264,30 @@ async def read_balances():
 	alist = await account_list()
 	if len(alist) == 0:
 		return None
-	bal = {}
-	for account in alist:
-		try:
-			rtn = Bitshares.rpc.get_account_balances(account[3], [])
-		except Exception as err:
-			rtn = []
-			print(err.__repr__())
-		for r in rtn:
+
+	while True:  # enable reenter due new assets
+		bal = {}
+		for account in alist:
 			try:
-				prec = int(Redisdb.hget("asset2:" + r['asset_id'], 'precision'))
-			except:
-				# if there is new assets what to do?
-				print('error')
-			symbol = Redisdb.hget("asset2:" + r['asset_id'], 'symbol').decode('utf8')
-			amount = round(int(r['amount']) / 10 ** prec, prec)
-			if amount > 0:
-				if symbol in bal:
-					bal[symbol] = [bal[symbol][0] + amount, 0]
-				else:
-					bal[symbol] = [amount, 0]
+				rtn = Bitshares.rpc.get_account_balances(account[3], [])
+			except Exception as err:
+				rtn = []
+				print(err.__repr__())
+			for r in rtn:
+				try:
+					prec = int(Redisdb.hget("asset2:" + r['asset_id'], 'precision'))
+				except:
+					Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'message': "New assets!", 'error': False}))
+					load_assets()  # reread new assets
+					continue
+				symbol = Redisdb.hget("asset2:" + r['asset_id'], 'symbol').decode('utf8')
+				amount = round(int(r['amount']) / 10 ** prec, prec)
+				if amount > 0:
+					if symbol in bal:
+						bal[symbol] = [bal[symbol][0] + amount, 0]
+					else:
+						bal[symbol] = [amount, 0]
+		break
 	Redisdb.setex("cache_balances", random.randint(200, 3000), json.dumps(bal))
 	return bal
 
@@ -383,8 +383,7 @@ def operations_listener():
 	Active_module = None
 
 	async def get_balances():
-		# TODO cache balances data
-		# TODO: defer execution and send in another packet
+		# TODO: another column for asset collateral
 		"""
 		Return balance consolidated with "balances_openpos"
 		:return: {'asset': [balance, open orders], ...}
@@ -412,7 +411,8 @@ def operations_listener():
 					tick[t[0]] = 0
 			bal1[b].append([tick[0]*base[0], tick[1]*base[0], tick[2], int(Redisdb.hget("asset1:" + b, 'precision'))])
 
-		margin_lock = 0
+		margin_lock_BTS = 0
+		margin_lock_USD = 0
 		bal3 = Redisdb.get("balances_callorders")
 		if bal3 is not None:
 			bal3 = json.loads(bal3.decode('utf8'))
@@ -421,10 +421,13 @@ def operations_listener():
 				for t in enumerate(tick):
 					if t[1] == float('Infinity'):
 						tick[t[0]] = 0
-				# assume that collateral is always BTS
-				margin_lock += (b[3] * base[0]) -  (b[1] * tick[0] * base[0])
+				# assume that collateral is always BTS and value in USD (base)
+				margin_lock_BTS += b[1]
+				margin_lock_USD += (b[3] * base[0]) -  (b[1] * tick[0] * base[0])
 
-		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'balances': bal1, 'margin_lock': margin_lock}))
+		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'balances': bal1,
+											'margin_lock_BTS': margin_lock_BTS,
+											'margin_lock_USD': margin_lock_USD}))
 
 
 	async def get_orderbook(mkt):
@@ -607,6 +610,9 @@ def operations_listener():
 			settings = json.loads(rtn.decode('utf8'))
 		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'settings_misc': settings}))
 
+	async def order_delete(id):
+		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'message': "Order {0} delete?".format(id)}))
+
 	async def master_unlock(dat):
 		rtn = Redisdb.get("settings_misc")
 		if rtn is None:
@@ -663,6 +669,8 @@ def operations_listener():
 			await settings_account_new(dat['data'])
 		elif dat['what'] == 'del_account':
 			await settings_account_del(dat['id'])
+		elif dat['what'] == 'del_order':
+			await order_delete(dat['id'])
 		elif dat['what'] == 'save_misc_settings':
 			await settings_misc_save(dat)
 		elif dat['what'] == 'get_settings_misc':
