@@ -8,6 +8,7 @@
 from browser import window, document, ajax, alert
 import wwebsockets
 import wglobals
+import wmodgeneral
 
 import json
 from functools import partial
@@ -41,10 +42,10 @@ Active_module = None
 
 def ws_received(data):
 	global ws_comm
-	if 'master_unlock' in data['data']:
-		master_unlock_rtn(data['data'])
-	elif 'message' in data['data']:
-		message(data['data'])
+	if data['module'] == 'general':
+		wmodgeneral.incoming_data(data)
+	elif 'message' in data:
+		wmodgeneral.message(data['message'])
 	else:
 		Active_module.incoming_data(data)
 
@@ -138,30 +139,9 @@ def ajax_end(url, request):
 def master_unlock(ev):
 	print("unlock:", document["iMPpasshrase"].value)
 	#document['MPerror'].innerHTML = "Password doesn't match?<br>Not implemented"
-	ws_comm.send({'operation': 'enqueue', 'module': "settings", 'what': 'master_unlock', 'data': document["iMPpasshrase"].value})
-
-def master_unlock_rtn(dat):
-	jq("#unlock_status").removeClass("pe-7s-lock")
-	if not dat['master_unlock']['error']:
-		jq("#modal_master_password").modal("hide")
-		document['MPerror'].innerHTML = ""
-		jq("#unlock_status").addClass("pe-7s-unlock")
-	else:
-		document['MPerror'].innerHTML = dat['master_unlock']['message']
-		jq("#unlock_status").addClass("pe-7s-lock")
+	ws_comm.send({'operation': 'enqueue', 'module': "general", 'what': 'master_unlock', 'data': document["iMPpasshrase"].value})
 
 
-def message(dat):
-	print("message:", dat)
-	lError = False
-	if 'error' in dat:
-		lError = dat['error']
-	if lError:
-		window.toastr.error(dat['message'], None,
-			{"debug": 0, "newestOnTop": 1, "positionClass": "toast-top-right", "closeButton": 1, "progressBar": True})
-	else:
-		window.toastr.info(dat['message'], None,
-			{"debug": 0, "newestOnTop": 1, "positionClass": "toast-top-right", "closeButton": 1, "progressBar": True})
 
 
 # bind menu links

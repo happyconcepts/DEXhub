@@ -106,6 +106,14 @@ import asyncio
 import json
 import arrow
 import random
+from cryptography.fernet import Fernet
+import hashlib
+import base64
+
+Master_hash = None
+Master_unlocked = False
+
+Active_module = None
 
 
 def load_assets():
@@ -181,41 +189,6 @@ def init():
 
 
 
-# TODO: dismissed in favour of limit_orders
-def datatables_del():
-	"""
-	Return data relevant to datatables module.
-	:return:
-	"""
-	try:
-		opos = json.loads(Redisdb.get('open_positions').decode('utf8'))
-	except Exception as err:
-		opos = None
-		print(err.__repr__())
-	rtn = {'open_positions': opos}
-	return rtn
-
-
-def limitorders_del():
-	"""
-	Return data relevant to limitorders module.
-	At starts
-	:return:
-	"""
-	return None
-
-
-
-def dashboard():
-	return []
-
-
-
-
-
-
-
-
 def blockchain_listener():
 	"""
 	Execute forever listening blockchain operations
@@ -277,7 +250,7 @@ async def read_balances():
 				try:
 					prec = int(Redisdb.hget("asset2:" + r['asset_id'], 'precision'))
 				except:
-					Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'message': "New assets!", 'error': False}))
+					Redisdb.rpush("datafeed", json.dumps({'module': "general", 'message': "New assets!", 'error': False}))
 					load_assets()  # reread new assets
 					continue
 				symbol = Redisdb.hget("asset2:" + r['asset_id'], 'symbol').decode('utf8')
@@ -377,10 +350,19 @@ def clear_cache():
 	Redisdb.delete("balances_callorders")
 
 
+def check_for_master_password():
+	msg = None
+	if not Master_unlocked:
+		msg = "Unlock with master password first."
+	elif Master_hash is None:
+		msg = "Setup a master password first and then unlock."
+	if msg is not None:
+		Redisdb.rpush("datafeed", json.dumps({'module': "general", 'message': msg,'error': True}))
+		return False
+	return True
+
 
 def operations_listener():
-
-	Active_module = None
 
 	async def get_balances():
 		# TODO: another column for asset collateral
@@ -546,14 +528,6 @@ def operations_listener():
 		if len(movs) > 0:
 			movs.sort(key=lambda x: x[0])
 			movs = movs[-100:]
-			movs2 = [["2004-01-02", 10452.74, 10409.85, 10367.41, 10554.96, 168890000],
-				["2004-01-05", 10411.85, 10544.07, 10411.85, 10575.92, 221290000],
-				["2004-01-06", 10543.85, 10538.66, 10454.37, 10584.07, 191460000],
-				["2004-01-07", 10535.46, 10529.03, 10432, 10587.55, 225490000],
-				["2004-04-20", 10437.85, 10314.5, 10297.39, 10530.61, 204710000],
-				["2004-04-21", 10311.87, 10317.27, 10200.38, 10398.53, 232630000],
-				["2004-04-22", 10314.99, 10461.2, 10255.88, 10529.12, 265740000]]
-			#movs.sort(key=lambda x: x[0])
 			Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'market_trades': {'market': mkt, 'data': movs}}))
 
 	async def get_settings_account_list():
@@ -562,6 +536,16 @@ def operations_listener():
 			accounts = []
 		else:
 			accounts = json.loads(rtn.decode('utf8'))
+		if Master_unlocked:
+			cipher = Fernet(Master_hash)  # cipher with master key hash
+		for ac in accounts:
+			if Master_unlocked:
+				try:
+					ac[2] = cipher.decrypt(ac[2].encode('utf8')).decode('utf8')
+				except:
+					ac[2] = "*error unlocking*"
+			else:
+				ac[2] = "*unlock for view*"
 		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'settings_account_list': accounts}))
 
 	async def settings_account_new(dat):
@@ -570,8 +554,16 @@ def operations_listener():
 			accounts = []
 		else:
 			accounts = json.loads(rtn.decode('utf8'))
-		account_id = Bitshares.rpc.get_account(dat[0])['id']
+		tmp = Bitshares.rpc.get_account(dat[0])
+		if tmp is None:
+			Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'message': "Account doesn't exists<br><strong>"+dat[0]+"</strong>", 'error': True}))
+			return
+		if not check_for_master_password():
+			return
+		account_id = tmp['id']
 		dat.append(account_id)
+		cipher = Fernet(Master_hash)  # cipher with master key hash
+		dat[2] = cipher.encrypt(dat[2].encode('utf8')).decode()
 		accounts.append(dat)
 		clear_cache()
 		Redisdb.set("settings_accounts", json.dumps(accounts))
@@ -591,13 +583,19 @@ def operations_listener():
 		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'message': "Account deleted"}))
 
 	async def settings_misc_save(dat):
+		global Master_hash
 		rtn = Redisdb.get("settings_misc")
 		if rtn is None:
 			settings = {}
 		else:
 			settings = json.loads(rtn.decode('utf8'))
 		for k in dat['data']:
-			settings[k] = dat['data'][k]
+			if k == "master_password":
+				if dat['data'][k].lstrip() != '':
+					Master_hash = base64.urlsafe_b64encode(hashlib.sha256(bytes(str(dat['data'][k]), 'utf8')).digest()).decode('utf8')
+					settings[k] = Master_hash
+			else:
+				settings[k] = dat['data'][k]
 		Redisdb.set("settings_misc", json.dumps(settings))
 		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'settings_misc': settings}))
 		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'message': "settings saved"}))
@@ -614,16 +612,16 @@ def operations_listener():
 		Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'message': "Order {0} delete?".format(id)}))
 
 	async def master_unlock(dat):
-		rtn = Redisdb.get("settings_misc")
-		if rtn is None:
-			return False
-		settings = json.loads(rtn.decode('utf8'))
-		if dat['data'] == settings['master_password']:
-			Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'master_unlock': {'message': 'unlocked', 'error': False}}))
-			Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'message': "Unlocked", 'error': False}))
+		global Master_unlocked
+		if base64.urlsafe_b64encode(hashlib.sha256(bytes(str(dat['data']), 'utf8')).digest()).decode('utf8') == Master_hash:
+			Master_unlocked = True
+			Redisdb.rpush("datafeed", json.dumps({'module': 'general', 'master_unlock': {'message': 'unlocked', 'error': False}}))
+			Redisdb.rpush("datafeed", json.dumps({'module': 'general', 'message': "Unlocked", 'error': False}))
+			Redisdb.rpush("datafeed", json.dumps({'module': 'general', 'reload': 1}))
 		else:
-			Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'master_unlock': {'message': "password does not match", 'error': True}}))
-			Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'message': "Password does not match", 'error': True}))
+			Master_unlocked = False
+			Redisdb.rpush("datafeed", json.dumps({'module': 'general', 'master_unlock': {'message': "password does not match", 'error': True}}))
+			Redisdb.rpush("datafeed", json.dumps({'module': 'general', 'message': "Password does not match", 'error': True}))
 
 	async def marketpanels_savelayout(dat):
 		Redisdb.set("MarketPanels_layout", dat['data'])
@@ -645,7 +643,9 @@ def operations_listener():
 		:param op:
 		:return:
 		"""
-		nonlocal Active_module
+		global Active_module
+		Active_module = Redisdb.get('Active_module').decode('utf8')
+
 		try:
 			dat = json.loads(op.decode('utf8'))
 		except Exception as err:
@@ -654,7 +654,6 @@ def operations_listener():
 		if dat['module'] != 'general' and dat['module'] != Redisdb.get('Active_module').decode('utf8'):  # discard
 			print("discard")
 			return
-		Active_module = dat['module']
 		if dat['what'] == 'orderbook':
 			await get_orderbook(dat['market'])
 		elif dat['what'] == 'open_positions':
@@ -685,6 +684,11 @@ def operations_listener():
 			Redisdb.rpush("datafeed", json.dumps({'module': Active_module, 'data': 'pong'}))
 
 	async def do_operations():
+		global Master_hash
+		rtn = Redisdb.get("settings_misc")
+		if rtn is not None:
+			Master_hash = json.loads(rtn.decode('utf8'))['master_password']
+
 		while True:
 			op = Redisdb.lpop("operations")
 			if op is None:

@@ -22,6 +22,7 @@ class Wscomm():
 		self.open = True
 
 	def _on_message(self, evt):
+		# error in callback will showed here
 		try:
 			#print("ws received", evt.data, type(evt.data))
 			data = json.loads(evt.data)
@@ -31,7 +32,7 @@ class Wscomm():
 			if 'Unexpected' in err.__repr__():
 				pos = int(err.__repr__().split(" ")[-1].split(">")[0])
 				print("error pos:", evt.data[pos-10:pos+10])
-			print("ws error evt.data", evt.data[:100], evt.data[-100:])
+			print("ws error evt.data", self.callback, evt.data[:100], evt.data[-100:])
 			print("ws error:", err.__repr__())
 
 	def _on_close(self, evt):

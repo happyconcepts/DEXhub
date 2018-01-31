@@ -71,22 +71,22 @@ def datatable_create(dt_rows, precision):
 
 def incoming_data(data):
 	global Balances
-	if 'balances' in data['data']:
-		Balances = data['data']['balances']
+	if 'balances' in data:
+		Balances = data['balances']
 		init_echart()
 		total_base = 0
 		# order by value in USD
 		ord = []
 		precision = {}
-		for asset in data['data']['balances']:
-			bal = data['data']['balances'][asset]
+		for asset in data['balances']:
+			bal = data['balances'][asset]
 			total = (bal[0] + bal[1]) * bal[2][0]
 			precision[asset] = bal[2][3]
 			ord.append([asset, total])
 			total_base += total
 		ord.sort(key=lambda x: x[1], reverse=True)
 
-		mlock = data['data']['margin_lock_USD']
+		mlock = data['margin_lock_USD']
 		mlock_str = "{0:,.2f}".format(mlock)
 		total_str = "{0:,.2f}".format(total_base)
 		total2_str = "{0:,.2f}".format(total_base+mlock)
@@ -99,7 +99,7 @@ def incoming_data(data):
 		num = 0
 		dt_rows = []
 		for asset in [x[0] for x in ord]:
-			bal = data['data']['balances'][asset]
+			bal = data['balances'][asset]
 			row = ''
 			row += '<td>{}</td>'.format(asset)
 			row += '<td>{0:,.5f}</td>'.format(bal[0] + bal[1])

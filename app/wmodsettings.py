@@ -13,12 +13,15 @@ Accounts = []
 
 Ws_comm = None
 
+def load():
+	Ws_comm.send({'operation': 'enqueue', 'module': "settings", 'what': 'account_list'})
+	Ws_comm.send({'operation': 'enqueue', 'module': "settings", 'what': 'get_settings_misc'})
+
 def init(comm):
 	global Ws_comm
 	Ws_comm = comm
 	#jq('#panel1').toggleClass('ld-loading')
-	Ws_comm.send({'operation': 'enqueue', 'module': "settings", 'what': 'account_list'})
-	Ws_comm.send({'operation': 'enqueue', 'module': "settings", 'what': 'get_settings_misc'})
+	load()
 	document["bNewAccount"].bind('click', click_new_account)
 	document["bSave"].bind('click', click_save_account)
 	document["bCancel"].bind('click', click_save_cancel)
@@ -55,10 +58,11 @@ def onResize():
 def incoming_data(data):
 	global Accounts
 	print('module', Module_name, "incoming_data")
-	print('>', data['data'])
-	if 'settings_account_list' in data['data']:
+	if 'reload' in data:
+		load()
+	elif 'settings_account_list' in data:
 		Accounts = []
-		if data['data']['settings_account_list'] is None:
+		if data['settings_account_list'] is None:
 			return
 		document['table1'].clear()
 		t1 = '<table class="table table-bordered table-hover"><thead><tr>' + \
@@ -66,7 +70,7 @@ def incoming_data(data):
 			'</tr></thead><tbody>'
 		t2 = ''
 		num = 0
-		for r in data['data']['settings_account_list']:
+		for r in data['settings_account_list']:
 			row = ''
 			for c in r:
 				row += '<td>{}</td>'.format(c)
@@ -80,7 +84,8 @@ def incoming_data(data):
 			document["bDelAccount_{}".format(n)].bind('click', click_del_account)
 
 
-	elif 'settings_misc' in data['data']:
-		for k in data['data']['settings_misc']:
+	elif 'settings_misc' in data:
+		for k in data['settings_misc']:
 			if k == 'master_password':
-				document['iMPpassphraseSet'].value = data['data']['settings_misc'][k]
+				document['iMPpassphraseSet'].value = ""
+				document['lMPHash'].innerHTML = data['settings_misc'][k]

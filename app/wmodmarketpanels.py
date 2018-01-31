@@ -194,11 +194,11 @@ def panel(id, mkt, column, title):
 
 def incoming_data(data):
 	global Panels, Order_pos
-	if 'pong' in data['data']:
+	if 'pong' in data:
 		print("pong!------")
 
-	elif 'market_trades' in data['data']:
-		market = data['data']['market_trades']['market']
+	elif 'market_trades' in data:
+		market = data['market_trades']['market']
 		for p in Panels:
 			if Panels[p]['market'] == market and Panels[p]['chart_type'] == "trades":
 				jq("#loading_" + p).hide()
@@ -208,14 +208,14 @@ def incoming_data(data):
 				og.market = market
 				Panels[p]['echart_obj'] = obj
 				Panels[p]['wmgraph_obj'] = og
-				Panels[p]['data'] = data['data']
+				Panels[p]['data'] = data
 				Panels[p]['next_refresh'] = datetime.datetime.now() + datetime.timedelta(seconds=random.randint(60,600))
 				og.load_data(Panels[p]['data']['market_trades']['data'])
 
-	elif 'orderbook' in data['data']:
-		market = data['data']['orderbook']['market']
-		maxv = data['data']['orderbook']['data'][0][3]
-		data['data']['orderbook']['data'].insert(0, ['buy', 0, 0, maxv])
+	elif 'orderbook' in data:
+		market = data['orderbook']['market']
+		maxv = data['orderbook']['data'][0][3]
+		data['orderbook']['data'].insert(0, ['buy', 0, 0, maxv])
 		for p in Panels:
 			if Panels[p]['market'] == market and Panels[p]['chart_type'] == "depth":
 				jq("#loading_" + p).hide()
@@ -227,23 +227,23 @@ def incoming_data(data):
 					og.orders = Order_pos[market]
 				Panels[p]['echart_obj'] = obj
 				Panels[p]['wmgraph_obj'] = og
-				Panels[p]['data'] = data['data']
+				Panels[p]['data'] = data
 				Panels[p]['next_refresh'] = datetime.datetime.now() + datetime.timedelta(seconds=random.randint(60,600))
 				og.load_data(Panels[p]['data']['orderbook']['data'])
 
-	elif 'marketpanels_layout' in data['data']:
-		print(data['data']['marketpanels_layout'])
-		for panel in data['data']['marketpanels_layout']:
+	elif 'marketpanels_layout' in data:
+		print(data['marketpanels_layout'])
+		for panel in data['marketpanels_layout']:
 			print(panel)
 			if len(panel) < 3:  # compatibility
 				new_panel(panel[0], panel[1], "depth")
 			else:
 				new_panel(panel[0], panel[1], panel[2])
 
-	elif 'open_positions' in data['data']:
-		if data['data']['open_positions'] is None:
+	elif 'open_positions' in data:
+		if data['open_positions'] is None:
 			return
-		dat1 = data['data']['open_positions']
+		dat1 = data['open_positions']
 		dat1.sort(key=lambda x: x[0]+x[3]+x[1])
 		markets = dict()
 		dat = []

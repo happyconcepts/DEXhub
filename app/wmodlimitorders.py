@@ -105,18 +105,19 @@ def table_drawn(settings):
 def incoming_data(data):
 	global Order_pos, Order_id_list
 	# [market, 'sell', "{0:,.5f}".format(q1), "{0:,.8f}".format(q2 / q1), "{0:,.5f}".format(q2), t[1]]
-	if data['data']['module'] != Module_name and data['data']['module'] != 'general':  # ignore if nothing to do here
+	print()
+	if data['module'] != Module_name and data['module'] != 'general':  # ignore if nothing to do here
 		return
-	if 'open_positions' in data['data']:
-
-		if data['data']['open_positions'] is None:
+	if 'open_positions' in data:
+		print(data.keys())
+		if data['open_positions'] is None:
 			return
 
 		Order_id_list = []
 		Order_id_deleted = []
 		#jq('#panel1').addClass('ld-loading')
 		cols = "Market,Operation,Quantity,Price,Total,Date"
-		dat1 = data['data']['open_positions']
+		dat1 = data['open_positions']
 		dat1.sort(key=lambda x: x[0]+x[3]+x[1])
 		markets = dict()
 
@@ -164,22 +165,22 @@ def incoming_data(data):
 		#jq('#panel1').removeClass('ld-loading')
 
 
-	elif 'orderbook' in data['data']:
-		market = data['data']['orderbook']['market']
-		maxv = data['data']['orderbook']['data'][0][3]
-		data['data']['orderbook']['data'].insert(0, ['buy', 0, 0, maxv])
-		ChartData[market] = data['data']['orderbook']['data']
+	elif 'orderbook' in data:
+		market = data['orderbook']['market']
+		maxv = data['orderbook']['data'][0][3]
+		data['orderbook']['data'].insert(0, ['buy', 0, 0, maxv])
+		ChartData[market] = data['orderbook']['data']
 
-	elif 'market_trades' in data['data']:
-		market = data['data']['market_trades']['market']
+	elif 'market_trades' in data:
+		market = data['market_trades']['market']
 		ograph = window.echarts.init(document.getElementById("echarty"))
 		og = w_mod_graphs.MarketTrades1(ograph)
 		og.title = market + " trades"
 		og.market = market
 		og.orders = Order_pos[market]
-		og.load_data(data['data']['market_trades']['data'])
+		og.load_data(data['market_trades']['data'])
 
-	elif 'balances' in data['data']:
+	elif 'balances' in data:
 		print("----- balances")
-		for b in data['data']['balances']:
+		for b in data['balances']:
 			print(b)

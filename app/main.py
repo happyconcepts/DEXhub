@@ -112,9 +112,8 @@ async def feeder():
 			df = json.loads(rtn.decode('utf8'))
 			if df['module'] != Active_module and df['module'] != 'general':  # discard data from previous modules #38
 				continue
-			dat = {'module': Active_module, 'data': df}
 			try:
-				await Client_comm.send(json.dumps(dat))
+				await Client_comm.send(json.dumps(df))
 			except Exception as err:
 				print(err.__repr__())
 		await sleep(0.01)

@@ -56,8 +56,11 @@
                             <p>wss://bitshares.openledger.info/ws</p>
                             <p>Node preferences</p>
                             <br>
-                            <div class="form-group"><label for="iMPpassphraseSet">Master password</label> <input type="text" class="form-control" id="iMPpassphraseSet" placeholder="passphrase">
-                                <p class="help-block">Password for unlock Wif keys</p></div>
+                            <div class="form-group"><label for="iMPpassphraseSet">Master password</label>
+                                <div class="form-inline"> <input type="text" class="form-control" id="iMPpassphraseSet" placeholder="passphrase">
+                                    <span> - Hash: </span><label id="lMPHash">password hash</label>
+                                </div>
+                                <p class="help-block">Password for unlock and encrypt Wif keys</p></div>
                             <br>
                             <strong class="c-white">Misc settings</strong>
                             <p>Another settings</p>
